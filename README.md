@@ -1,45 +1,29 @@
-# Huellitas — versión compartida
+# Huellitas v7 — adopciones + servicios
 
-Huellitas es una PWA simple para:
-- reportar mascotas perdidas o encontradas;
-- ver publicaciones de otros usuarios;
-- resolver un caso para que deje de aparecer en la búsqueda activa;
-- eliminar una publicación creada por error;
-- revisar “Mis publicaciones”;
-- usar un apartado de configuración básica;
-- consultar adopciones y servicios veterinarios.
+Versión de Huellitas que mantiene el funcionamiento compartido de reportes y añade dos cambios principales:
 
-## Modo actual
+## Adopta
 
-Sin Supabase configurado, la app funciona en modo local como respaldo.
+- Las mascotas de adopción ya no son datos ficticios.
+- Cualquier usuario conectado puede publicar una mascota real para adopción.
+- La publicación aparece **solo** en el apartado `Adopta`.
+- Foto, nombre, especie, edad, tamaño, distrito, descripción y contacto.
+- El responsable puede marcarla como `Adoptado` o eliminarla; el cambio se refleja para todos.
+- Las demás personas pueden enviar una solicitud de adopción.
+- El responsable puede ver y gestionar las solicitudes.
 
-Con Supabase configurado, las publicaciones se guardan online y se sincronizan en tiempo real entre celulares.
+## Servicios
 
-## Archivos importantes
+- Se solucionó el fallo que dejaba la sección vacía.
+- Incluye un directorio inicial de veterinarias reales de Lima, con teléfonos, horarios, dirección, web/fuente y botón `Cómo llegar`.
+- Los datos fueron verificados online el 21/09/2026; la app avisa que horarios y teléfonos pueden cambiar.
 
-- `index.html`: entrada de la aplicación.
-- `app.js`: lógica de Huellitas.
-- `styles.css`: diseño.
-- `manifest.webmanifest`: instalación PWA.
-- `sw.js`: caché/offline.
-- `supabase-config.js`: URL y clave pública de Supabase.
-- `supabase-schema.sql`: tablas, seguridad, fotos y Realtime.
-- `SUPABASE_SETUP.md`: guía rápida de conexión.
+## Supabase
 
-## Para ponerla en GitHub Pages
+Antes de probar Adopta, ejecuta `supabase-adoptions.sql` en Supabase > SQL Editor.
 
-1. Crea/configura tu proyecto Supabase.
-2. Ejecuta `supabase-schema.sql`.
-3. Habilita Anonymous Sign-Ins.
-4. Coloca Project URL y anon/publishable key en `supabase-config.js`.
-5. Sube todos los archivos al repositorio `huellitas` y haz Commit.
-6. GitHub Pages volverá a publicar la misma URL.
+La URL y la Publishable key están en `supabase-config.js`.
 
-Nunca uses la `service_role` key en el frontend.
+## Publicación
 
-
-## Huellitas conectada a Supabase
-
-Esta versión incluye conexión al proyecto Supabase de Huellitas mediante la clave publishable. Las publicaciones se almacenan en la tabla `reports`, las fotos en `report-photos` y los cambios se sincronizan con Realtime.
-
-Para producción, no reemplaces la clave publishable por una clave `sb_secret_` o `service_role`; esas claves son privadas y no deben llegar al navegador.
+Sube los archivos de esta carpeta a la raíz del repositorio de GitHub Pages, reemplazando los existentes y haciendo un nuevo commit. No cambies el repositorio ni la configuración de Pages.

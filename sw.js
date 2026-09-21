@@ -1,4 +1,4 @@
-const CACHE = 'huellitas-v5-supabase';
+const CACHE = 'huellitas-v7-adopciones-servicios';
 const APP_SHELL = [
   './',
   './index.html',

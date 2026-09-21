@@ -52,7 +52,7 @@ body{padding-bottom:84px}
 .badge{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;background:#edf4ff;color:var(--blue)}
 .badge.danger{background:#fff0f0;color:var(--danger)}
 .badge.success{background:#e9faf3;color:var(--success)}
-.card-actions{display:flex;gap:8px;margin-top:12px}
+.card-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .primary-btn,.secondary-btn,.danger-btn{border:0;border-radius:12px;padding:11px 13px;font-weight:800;min-height:42px;transition:.15s}
 .primary-btn{background:var(--blue);color:#fff}
 .secondary-btn{background:#f4f6fa;color:var(--ink);border:1px solid var(--line)}
@@ -136,3 +136,5 @@ body.dark-mode .topbar,body.dark-mode .bottom-nav,body.dark-mode .pet-card,body.
 body.dark-mode .icon-btn,body.dark-mode .secondary-btn,body.dark-mode .compact-select,body.dark-mode .field input,body.dark-mode .field select,body.dark-mode .field textarea{background:#18212c;color:var(--ink);border-color:#32404f} 
 body.dark-mode .stat,body.dark-mode .secondary-btn,body.dark-mode .quick-card .q-icon{background:#202c39;color:var(--ink)}
 body.dark-mode .hero{box-shadow:none}
+
+.service-actions a{flex:1;min-width:110px}.service-actions a:hover{text-decoration:none}.small-note{font-size:11px;color:var(--muted)}

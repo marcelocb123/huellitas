@@ -1,68 +1,26 @@
-# Conectar Huellitas a una base de datos compartida
+# Configuración Supabase — Huellitas v7
 
-Esta versión añade:
-- reportes compartidos entre todos los celulares;
-- actualización en tiempo real cuando alguien publica, resuelve o elimina un reporte;
-- “Mis publicaciones”;
-- “Ya la encontré” / “Caso resuelto”;
-- “Eliminar publicación” para publicaciones propias;
-- configuración básica.
+La parte de reportes perdidos/encontrados ya usa la tabla `reports` de tu proyecto.
 
-## 1) Crear proyecto
+Para habilitar **Adopta** en esta versión:
 
-Crea un proyecto en Supabase.
+1. Abre tu proyecto `huellitas` en Supabase.
+2. Ve a **SQL Editor** → **New query**.
+3. Abre el archivo `supabase-adoptions.sql` que viene en este ZIP.
+4. Pega todo el contenido y pulsa **Run**.
+5. Debe terminar con `Success`.
+6. No borres ni reemplaces la tabla `reports` ni sus políticas actuales.
 
-## 2) Activar usuarios anónimos
+Este SQL crea:
 
-En Supabase ve a Authentication > Providers / Sign In methods y habilita Anonymous Sign-Ins.
+- `adoptions`: publicaciones reales de mascotas para adopción.
+- `adoption_requests`: solicitudes de personas interesadas.
+- bucket `adoption-photos`: fotos de adopción.
+- políticas RLS: todos los usuarios autenticados pueden ver adopciones; solo quien publica puede editar, marcar como adoptada o eliminar su publicación.
+- Realtime para `adoptions` y `adoption_requests`.
 
-No hace falta pedir correo ni contraseña: Huellitas crea un usuario anónimo en el dispositivo para identificar quién puede editar o eliminar sus propios reportes.
+## Importante
 
-## 3) Crear tablas y almacenamiento
+Esta versión ya no usa mascotas ficticias de demostración para la sección **Adopta**. Si la base está vacía, la pantalla mostrará que todavía no hay publicaciones.
 
-Abre SQL Editor en Supabase y ejecuta TODO el contenido de:
-
-`supabase-schema.sql`
-
-El SQL crea la tabla `reports`, políticas de seguridad, el bucket público `report-photos` y la suscripción Realtime.
-
-## 4) Copiar las credenciales públicas
-
-En Supabase abre Project Settings > API.
-
-Copia:
-- Project URL
-- Publishable/anon key
-
-Pégalos en `supabase-config.js`:
-
-```js
-window.HUELLITAS_SUPABASE = {
-  url: 'https://TU-PROYECTO.supabase.co',
-  anonKey: 'TU_ANON_KEY'
-};
-```
-
-Usa SOLO la clave pública/anon/publishable. Nunca pongas `service_role` en el frontend.
-
-## 5) Subir a GitHub
-
-Reemplaza los archivos del repositorio por esta versión y conserva el mismo repositorio y la misma URL de GitHub Pages.
-
-Cada commit de `main` volverá a publicar Huellitas.
-
-## 6) Cómo funciona
-
-Todos pueden ver los reportes activos.
-
-La persona que crea un reporte queda como propietaria gracias al usuario anónimo del dispositivo.
-
-En “Mis publicaciones” puede:
-- Resolver el caso: la publicación pasa a resuelta y deja de mostrarse en el listado activo.
-- Eliminar por error: borra la publicación de la base de datos.
-
-Gracias a Realtime, los demás celulares reciben el cambio sin tener que reinstalar la app. Si una persona elimina o resuelve un reporte, desaparece del listado activo para todos.
-
-## Importante sobre “Eliminar por error”
-
-En esta versión solo el creador del reporte puede eliminarlo o resolverlo. Los demás usuarios pueden verlo, compartirlo y contactar al creador.
+Las solicitudes de adopción son visibles para el responsable de la publicación y para quien las envió. El responsable puede cambiar el estado entre **Pendiente, Aprobada y Rechazada**.

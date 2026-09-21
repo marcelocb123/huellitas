@@ -1,14 +1,22 @@
-# Publicar / actualizar Huellitas
+# Publicar Huellitas v7 en GitHub Pages
 
-1. Mantén en el repositorio raíz: `index.html`, `app.js`, `styles.css`, `manifest.webmanifest`, `sw.js`, `supabase-config.js`, `icon-192.png`, `icon-512.png` e `icon.svg`.
-2. Sube los archivos nuevos al repositorio GitHub `huellitas` y haz `Commit changes`.
-3. GitHub Pages seguirá usando `main` + `/ (root)` y actualizará la misma URL:
-   https://marcelocb123.github.io/huellitas/
-4. En Supabase deben estar activados: Authentication > Anonymous sign-ins, la tabla `public.reports`, el bucket `report-photos`, las políticas RLS y Realtime. Todo esto lo crea `supabase-schema.sql`.
+1. Descomprime este ZIP.
+2. En tu repositorio `huellitas`, entra a `Add file` → `Upload files`.
+3. Selecciona todos los archivos de esta carpeta.
+4. GitHub reemplazará los archivos con el mismo nombre y añadirá los nuevos.
+5. Deja `Commit directly to the main branch`.
+6. Usa como mensaje: `Huellitas v7 - adopciones y servicios`.
+7. Haz `Commit changes`.
+8. Espera a que GitHub Pages termine de desplegar la nueva versión.
 
-## Flujo compartido
-- Una publicación se inserta en Supabase y todos los dispositivos autenticados anónimamente pueden verla.
-- Solo el usuario que creó la publicación puede marcarla como resuelta o eliminarla.
-- Al resolverse, deja de aparecer en las búsquedas activas para todos.
-- Al eliminarse, desaparece para todos.
-- Realtime refresca la interfaz cuando otra persona publica, resuelve o elimina un aviso.
+## Supabase antes de usar Adopta
+
+En Supabase > SQL Editor ejecuta todo el archivo `supabase-adoptions.sql` una sola vez.
+
+## Pruebas recomendadas
+
+- Publicar una adopción desde el PC y verla desde otro celular.
+- Marcarla como adoptada y comprobar que desaparece para todos.
+- Eliminarla y comprobar que desaparece para todos.
+- Enviar `Quiero adoptar` desde un segundo dispositivo y revisar la solicitud en `Mis publicaciones` del responsable.
+- Abrir `Servicios` y probar `Cómo llegar` y el botón de web/fuente.
