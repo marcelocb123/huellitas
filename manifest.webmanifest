@@ -1,0 +1,17 @@
+{
+  "name": "Huellitas — Encuentra, ayuda y adopta",
+  "short_name": "Huellitas",
+  "description": "Encuentra, ayuda y adopta mascotas en un solo lugar.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f9fc",
+  "theme_color": "#1268e8",
+  "lang": "es-PE",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    {"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
