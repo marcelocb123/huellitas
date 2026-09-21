@@ -27,7 +27,10 @@
           <span>encuentra · ayuda · adopta</span>
         </div>
       </div>
-      <button class="icon-btn" id="installBtn" hidden aria-label="Instalar Huellitas" title="Instalar aplicación">⇩</button>
+      <div class="top-actions">
+        <button class="icon-btn" id="installBtn" hidden aria-label="Instalar Huellitas" title="Instalar aplicación">⇩</button>
+        <button class="icon-btn" id="settingsBtn" aria-label="Configuración" title="Configuración">⚙</button>
+      </div>
     </header>
 
     <main id="main" class="main-content" aria-live="polite"></main>
@@ -44,6 +47,9 @@
   <div id="modalRoot"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="installHelp" class="install-help" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
