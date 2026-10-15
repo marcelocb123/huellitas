@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#1268e8">
+  <meta name="theme-color" content="#f8faf8">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -27,6 +27,13 @@
           <span>encuentra · ayuda · adopta</span>
         </div>
       </div>
+      <nav class="desktop-nav" aria-label="Navegación principal">
+        <button class="nav-item active" data-route="home">Inicio</button>
+        <button class="nav-item" data-route="lost">Perdidos</button>
+        <button class="nav-item" data-route="adopt">Adopta</button>
+        <button class="nav-item" data-route="services">Servicios</button>
+        <button class="nav-item" data-route="my">Mi espacio</button>
+      </nav>
       <div class="top-actions">
         <button class="icon-btn" id="installBtn" hidden aria-label="Instalar Huellitas" title="Instalar aplicación">⇩</button>
         <button class="icon-btn" id="settingsBtn" aria-label="Configuración" title="Configuración">⚙</button>
@@ -37,10 +44,10 @@
 
     <nav class="bottom-nav" aria-label="Navegación principal">
       <button class="nav-item active" data-route="home" aria-label="Inicio"><span class="nav-icon">⌂</span><span>Inicio</span></button>
-      <button class="nav-item" data-route="lost" aria-label="Perdidos y encontrados"><span class="nav-icon">⌕</span><span>Buscar</span></button>
-      <button class="report-fab" id="reportBtn" aria-label="Reportar una mascota"><span>＋</span><small>Reportar</small></button>
-      <button class="nav-item" data-route="adopt" aria-label="Adopciones"><span class="nav-icon">♥</span><span>Adopta</span></button>
-      <button class="nav-item" data-route="services" aria-label="Servicios veterinarios"><span class="nav-icon">✚</span><span>Servicios</span></button>
+      <button class="nav-item" data-route="lost" aria-label="Perdidos"><span class="nav-icon">⌕</span><span>Perdidos</span></button>
+      <button class="nav-item" data-route="adopt" aria-label="Adopta"><span class="nav-icon">♡</span><span>Adopta</span></button>
+      <button class="nav-item" data-route="services" aria-label="Servicios"><span class="nav-icon">✚</span><span>Servicios</span></button>
+      <button class="nav-item" data-route="my" aria-label="Mi espacio"><span class="nav-icon">♙</span><span>Mi espacio</span></button>
     </nav>
   </div>
 
@@ -54,3 +61,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+
