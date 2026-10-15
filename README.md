@@ -28,12 +28,12 @@ Si la etapa previa termina con error, su transacción revierte los cambios sin d
 
 ### Respaldo de producción antes de ejecutar SQL
 
-1. En Supabase, abre **Database > Backups** y confirma que hay un respaldo exitoso anterior a la actualización. Anota la fecha y hora; si el plan no ofrece un respaldo descargable, prepara una exportación lógica antes de continuar.
-2. Abre **Storage** y respalda por separado todos los objetos de `report-photos` y `adoption-photos`. Guarda las carpetas y nombres de archivo; un respaldo de base de datos no contiene los archivos de fotos.
+1. En Supabase, abre **Database > Backups** y confirma que hay un respaldo exitoso anterior a la actualización. Anota la fecha y hora. Si no aparece uno utilizable, detente antes de ejecutar SQL y prepara una exportación lógica completa siguiendo la guía oficial; una exportación predeterminada del CLI puede omitir los datos de Auth y no incluir datos de tablas.
+2. Abre **Storage > Files**, entra a `report-photos` y `adoption-photos` y descarga sus objetos por separado. Conserva carpetas y nombres de archivo; para muchos archivos, usa la opción de copia masiva documentada por Supabase.
 3. Comprueba que el número de archivos respaldados coincide con el de cada bucket y que puedes abrir algunos archivos desde la copia.
 4. Guarda la exportación y las fotos en una ubicación segura distinta de Supabase. No pruebes la restauración encima de producción: usa un proyecto aparte.
 
-Los respaldos de base de datos incluyen las cuentas y registros de Auth, pero no los objetos de Storage. Consulta la guía de [respaldos y restauración de Supabase](https://supabase.com/docs/guides/platform/backups).
+Los respaldos automáticos de la base incluyen Auth, pero no los archivos de Storage. Las exportaciones lógicas requieren pasos separados para incluir datos, Auth y objetos. Consulta la guía de [respaldos y restauración](https://supabase.com/docs/guides/platform/backups), la guía de [exportación con CLI](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore) y la guía de [descarga de objetos](https://supabase.com/docs/guides/storage/management/download-objects).
 
 `supabase-adoption-notifications.sql` contiene la instalación completa para una base aislada o un entorno nuevo. En producción con la app existente, sigue las dos etapas anteriores; no ejecutes el archivo completo antes del merge.
 
