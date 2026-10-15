@@ -22,7 +22,18 @@ Versión de Huellitas que mantiene el funcionamiento compartido de reportes y a�
 
 Antes de probar Adopta, ejecuta `supabase-adoptions.sql` en Supabase > SQL Editor.
 
-Para habilitar solicitudes y notificaciones en una base que ya está en uso, usa el despliegue en dos etapas descrito en `supabase-adoption-notifications-predeploy.sql` y `supabase-adoption-notifications-lockdown.sql`. La etapa previa al merge crea las tablas y triggers, copia los contactos existentes y conserva compatibilidad con la versión pública actual. Después de desplegar el PR, la etapa final restringe la columna de contacto antigua. Ninguna etapa elimina publicaciones ni solicitudes.
+Para habilitar solicitudes y notificaciones en una base que ya está en uso, sigue las etapas de `supabase-adoption-notifications-predeploy.sql` y `supabase-adoption-notifications-lockdown.sql`. La etapa previa al merge crea las tablas y triggers, copia los contactos existentes y mantiene la columna de contacto antigua disponible durante la transición. La etapa final, después del despliegue, bloquea el acceso a esa columna y exige cuentas vinculadas para nuevas publicaciones y solicitudes.
+
+Si la etapa previa termina con error, su transacción revierte los cambios sin dejar una ejecución parcial. Si hay que volver a la aplicación anterior después de que la etapa previa se haya confirmado, ejecuta `supabase-adoption-notifications-predeploy-rollback.sql` antes de desplegar la aplicación nueva. La reversión copia los contactos privados faltantes al campo legado, valida que todas las publicaciones tengan contacto y se detiene sin confirmar si falta alguno. Desactiva los triggers y el acceso de la API a contactos/notificaciones, pero conserva esas tablas y todas sus filas. No elimina publicaciones, solicitudes, contactos ni avisos. Esta reversión no es para después de ejecutar `lockdown`; en ese caso, primero se debe preparar una reversión coordinada de la aplicación y de las políticas finales.
+
+### Respaldo de producción antes de ejecutar SQL
+
+1. En Supabase, abre **Database > Backups** y confirma que hay un respaldo exitoso anterior a la actualización. Anota la fecha y hora; si el plan no ofrece un respaldo descargable, prepara una exportación lógica antes de continuar.
+2. Abre **Storage** y respalda por separado todos los objetos de `report-photos` y `adoption-photos`. Guarda las carpetas y nombres de archivo; un respaldo de base de datos no contiene los archivos de fotos.
+3. Comprueba que el número de archivos respaldados coincide con el de cada bucket y que puedes abrir algunos archivos desde la copia.
+4. Guarda la exportación y las fotos en una ubicación segura distinta de Supabase. No pruebes la restauración encima de producción: usa un proyecto aparte.
+
+Los respaldos de base de datos incluyen las cuentas y registros de Auth, pero no los objetos de Storage. Consulta la guía de [respaldos y restauración de Supabase](https://supabase.com/docs/guides/platform/backups).
 
 `supabase-adoption-notifications.sql` contiene la instalación completa para una base aislada o un entorno nuevo. En producción con la app existente, sigue las dos etapas anteriores; no ejecutes el archivo completo antes del merge.
 
@@ -34,4 +45,5 @@ La URL y la Publishable key están en `supabase-config.js`. En Supabase Auth, co
 
 ## Integración
 
-Despliegue de producción: 1) revisa la configuración de Auth y ejecuta `supabase-adoption-notifications-predeploy.sql`; 2) confirma que las tablas y triggers están listos; 3) integra el PR para desplegar la nueva app; 4) valida que la app nueva funciona y luego ejecuta `supabase-adoption-notifications-lockdown.sql`; 5) comprueba creación de publicación, solicitud y notificación. No ejecutes el SQL de instalación completa en producción.
+Despliegue de producción: 1) sigue la lista de respaldos de arriba; 2) revisa la configuración de Auth y ejecuta `supabase-adoption-notifications-predeploy.sql`; 3) confirma que las tablas y triggers están listos; 4) integra el PR para desplegar la nueva app; 5) valida publicación, solicitud, avisos y acceso al contacto con dos cuentas; 6) ejecuta `supabase-adoption-notifications-lockdown.sql` y comprueba las políticas y permisos finales. Si necesitas volver a la app anterior antes del despliegue nuevo, usa el archivo de reversión. No ejecutes el SQL de instalación completa en producción.
+
