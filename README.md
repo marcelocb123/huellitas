@@ -22,8 +22,14 @@ Versión de Huellitas que mantiene el funcionamiento compartido de reportes y a�
 
 Antes de probar Adopta, ejecuta `supabase-adoptions.sql` en Supabase > SQL Editor.
 
+Para activar la bandeja de solicitudes y notificaciones, ejecuta después `supabase-adoption-notifications.sql` en Supabase > SQL Editor. La actualización conserva las publicaciones y solicitudes existentes; copia los teléfonos de adopción a una tabla privada, mantiene la columna original pero revoca su lectura desde la app, y crea las políticas, avisos y suscripciones en tiempo real.
+
+En Authentication > Sign In / Providers, habilita Email/Password, la confirmación de correo y **Allow manual linking**. Las nuevas publicaciones y solicitudes de adopción requieren una cuenta vinculada con correo verificado para poder recuperarlas en otro dispositivo. Una sesión anónima existente conserva el mismo usuario y sus datos al vincular un correo; iniciar sesión en una cuenta distinta no combina automáticamente los datos anónimos locales.
+
+Para probar el flujo con dos personas: inicia sesión con la cuenta del responsable y publica una mascota; en otro dispositivo o perfil privado, inicia sesión con una cuenta distinta y envía una solicitud; vuelve a la cuenta responsable para aceptarla o rechazarla. El solicitante verá el aviso y el estado en Mi espacio. El teléfono del responsable solo se devuelve a la cuenta solicitante cuando la solicitud está aceptada. Aceptar una solicitud no marca la publicación como adoptada.
+
 La URL y la Publishable key están en `supabase-config.js`.
 
-## Publicación
+## Integración
 
-Sube los archivos de esta carpeta a la raíz del repositorio de GitHub Pages, reemplazando los existentes y haciendo un nuevo commit. No cambies el repositorio ni la configuración de Pages.
+Revisa e integra estos cambios mediante el Pull Request. Antes de habilitar esta versión para usuarios, ejecuta la actualización SQL y comprueba las opciones de autenticación indicadas arriba.

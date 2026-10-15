@@ -48,6 +48,8 @@
   const navItems = [...document.querySelectorAll('.nav-item')];
   const installBtn = document.getElementById('installBtn');
   const installHelp = document.getElementById('installHelp');
+  const notificationsBtn = document.getElementById('notificationsBtn');
+  const notificationCount = document.getElementById('notificationCount');
 
   let currentRoute = 'home';
   let deferredInstall = null;
@@ -56,6 +58,10 @@
   let currentUser = null;
   let reportsCache = [];
   let adoptionsCache = [];
+  let adoptionRequestsCache = [];
+  let notificationsCache = [];
+  let notificationUnreadCount = 0;
+  let accountMode = 'link';
   let adoptionTableReady = false;
   let realtimeChannel = null;
 
@@ -92,6 +98,7 @@
     if(route === 'adopt') renderAdopt();
     if(route === 'services') renderServices();
     if(route === 'my') renderMyPublications();
+    if(route === 'my') loadMyAdoptionRequests();
     if(route === 'settings') renderSettings();
   }
 
@@ -239,27 +246,77 @@
       <div class="section-head"><div><h2>Perdidas y encontradas</h2><p>Tus avisos compartidos con la comunidad.</p></div></div>
       ${mineReports.length ? `<div class="cards-grid">${mineReports.filter(r=>r.status!=='resolved').map(myReportCard).join('')}</div>` : emptyBlock('Todavía no tienes reportes.','Publica una mascota perdida o encontrada.')}
       ${resolvedMine.length ? `<div class="section-head"><div><h2>Casos resueltos</h2><p>Ya no aparecen en la búsqueda pública activa.</p></div></div><div class="cards-grid">${resolvedMine.map(myReportCard).join('')}</div>` : ''}
+      <div class="section-head"><div><h2>Solicitudes recibidas</h2><p>Personas interesadas en adoptar tus mascotas.</p></div></div>
+      ${currentUser?.is_anonymous?'<div class="notice">Vincula una cuenta verificada desde Configuración para crear nuevas solicitudes o publicaciones de adopción que puedas recuperar en otro dispositivo.</div>':''}
+      <div id="receivedRequests">${emptyBlock('Cargando solicitudes…','')}</div>
+      <div class="section-head"><div><h2>Solicitudes enviadas</h2><p>Consulta las respuestas de los responsables.</p></div></div>
+      <div id="sentRequests">${emptyBlock('Cargando solicitudes…','')}</div>
       <div class="section-head"><div><h2>Mis adopciones</h2><p>Estas publicaciones aparecen únicamente en la sección Adopta.</p></div><button class="primary-btn" data-action="publishAdoption">＋ Publicar para adopción</button></div>
       ${mineAdoptions.length ? `<div class="cards-grid">${mineAdoptions.map(myAdoptionCard).join('')}</div>` : emptyBlock('Todavía no publicaste ninguna mascota para adopción.','Cuando publiques una, podrás marcarla como adoptada o eliminarla.')}
     </section>`;
     bindDynamic();
   }
 
+  async function loadMyAdoptionRequests(){
+    if(!remoteEnabled || !currentUser) return;
+    const sentEl=document.getElementById('sentRequests'), receivedEl=document.getElementById('receivedRequests');
+    if(!sentEl || !receivedEl) return;
+    const ownIds=adoptionsCache.filter(a=>a.user_id===currentUser.id).map(a=>a.id);
+    try{
+      const sentQuery=supabaseClient.from('adoption_requests').select('id,adoption_id,applicant_user_id,name,phone,reason,status,created_at,updated_at').eq('applicant_user_id',currentUser.id).order('created_at',{ascending:false});
+      const receivedQuery=ownIds.length ? supabaseClient.from('adoption_requests').select('id,adoption_id,applicant_user_id,name,phone,reason,status,created_at,updated_at').in('adoption_id',ownIds).order('created_at',{ascending:false}) : Promise.resolve({data:[],error:null});
+      const [sent,received]=await Promise.all([sentQuery,receivedQuery]);
+      if(sent.error) throw sent.error; if(received.error) throw received.error;
+      adoptionRequestsCache=[...(sent.data||[]),...(received.data||[])].filter((r,i,all)=>all.findIndex(x=>x.id===r.id)===i);
+      sentEl.innerHTML=(sent.data||[]).length ? sent.data.map(renderSentRequest).join('') : emptyBlock('Aún no has enviado solicitudes.','Cuando solicites adoptar, podrás seguir aquí su estado.');
+      receivedEl.innerHTML=(received.data||[]).length ? received.data.map(renderReceivedRequest).join('') : emptyBlock('No tienes solicitudes recibidas.','Cuando alguien se interese, aparecerá aquí.');
+      sentEl.querySelectorAll('[data-contact-request]').forEach(b=>b.onclick=()=>revealAdoptionContact(b.dataset.contactRequest));
+      receivedEl.querySelectorAll('[data-request-status]').forEach(b=>b.onclick=()=>setAdoptionRequestStatus(b.dataset.requestStatus,b.dataset.status));
+    }catch(err){
+      sentEl.innerHTML=receivedEl.innerHTML=emptyBlock('No se pudieron cargar las solicitudes.',esc(err?.message||'Intenta actualizar la página.'));
+    }
+  }
+
+  function requestStatusLabel(status){return ({pending:'Pendiente',approved:'Aceptada',rejected:'Rechazada'})[status]||status;}
+  function renderReceivedRequest(r){const pet=adoptionsCache.find(a=>a.id===r.adoption_id);return `<article class="request-card"><h3>${esc(r.name)} · ${esc(pet?.name||'Mascota')}</h3><p>Teléfono / WhatsApp: ${esc(r.phone)}</p><p>${esc(r.reason)}</p><span class="badge ${r.status==='approved'?'success':r.status==='rejected'?'danger':''}">${requestStatusLabel(r.status)}</span>${r.status==='pending'?`<div class="card-actions"><button class="primary-btn" data-request-status="${esc(r.id)}" data-status="approved">Aceptar</button><button class="secondary-btn" data-request-status="${esc(r.id)}" data-status="rejected">Rechazar</button></div>`:''}</article>`;}
+  function renderSentRequest(r){const pet=adoptionsCache.find(a=>a.id===r.adoption_id);return `<article class="request-card"><h3>${esc(pet?.name||'Mascota')}</h3><p>Enviada ${fmtDate(r.created_at?.slice(0,10))}</p><span class="badge ${r.status==='approved'?'success':r.status==='rejected'?'danger':''}">${requestStatusLabel(r.status)}</span>${r.status==='approved'?`<div class="card-actions"><button class="secondary-btn" data-contact-request="${esc(r.adoption_id)}">Ver contacto del responsable</button></div><div id="contact-${esc(r.adoption_id)}"></div>`:''}</article>`;}
+
+  async function setAdoptionRequestStatus(id,status){
+    if(!['approved','rejected'].includes(status)) return;
+    const row=adoptionRequestsCache.find(r=>r.id===id); if(!row || !adoptionsCache.some(a=>a.id===row.adoption_id && a.user_id===currentUser?.id)){toast('Solo el responsable puede responder esta solicitud.');return;}
+    const {error}=await supabaseClient.from('adoption_requests').update({status,updated_at:new Date().toISOString()}).eq('id',id).eq('status','pending');
+    if(error){toast(errorText(error,'No se pudo responder la solicitud.'));return;}
+    toast(status==='approved'?'Solicitud aceptada. La mascota sigue disponible hasta que marques su publicación como adoptada.':'Solicitud rechazada.');
+    await loadMyAdoptionRequests(); await loadNotifications();
+  }
+
+  async function revealAdoptionContact(adoptionId){
+    const host=document.getElementById(`contact-${adoptionId}`); if(!host) return;
+    const {data,error}=await supabaseClient.from('adoption_contacts').select('contact').eq('adoption_id',adoptionId).maybeSingle();
+    if(error || !data){host.innerHTML=`<p>${esc(error?.message||'El contacto no está disponible.')}</p>`;return;}
+    const phone=String(data.contact||''), digits=normalizePhone(phone);
+    host.innerHTML=`<p>Teléfono / WhatsApp: <a href="https://wa.me/${esc(digits)}" target="_blank" rel="noopener noreferrer">${esc(phone)}</a></p>`;
+  }
+
   function renderSettings(){
     const settings = getSettings();
+    const pendingEmail=localStorage.getItem('huellitas_pending_account_email');
+    const finishingAccount=Boolean(pendingEmail && currentUser?.email===pendingEmail && currentUser?.email_confirmed_at);
     main.innerHTML = `<section>
       <div class="section-head"><div><h2>Configuración</h2><p>Opciones básicas de Huellitas.</p></div></div>
       <div class="settings-list">
         <div class="setting-item"><div><strong>Estado de sincronización</strong><p>${remoteEnabled ? 'Conectada a la base compartida. Los cambios se sincronizan entre celulares.' : 'Modo local de respaldo.'}</p></div><span class="status-pill ${remoteEnabled?'ok':'warn'}">${remoteEnabled?'Conectada':'Modo local'}</span></div>
+        <div class="setting-item account-setting"><div><strong>${currentUser && !currentUser.is_anonymous ? (finishingAccount?'Completa tu cuenta':'Cuenta vinculada') : accountMode==='signin'?'Inicia sesión para recuperar tus datos':'Guarda tus solicitudes en otros dispositivos'}</strong><p>${currentUser && !currentUser.is_anonymous && !finishingAccount ? `Sesión iniciada como ${esc(currentUser.email||'cuenta verificada')}.` : finishingAccount ? 'Correo confirmado. Define una contraseña para iniciar sesión en otros dispositivos.' : accountMode==='signin'?'Usa el correo verificado y la contraseña que vinculaste. Así recuperarás solicitudes y publicaciones en este dispositivo.':'Vincula un correo verificado y una contraseña para recuperar tus solicitudes y publicaciones en otros celulares. Primero confirmaremos tu correo; después podrás definir la contraseña.'}</p>${currentUser?.is_anonymous || finishingAccount ? `<form id="accountForm" class="account-form"><input name="email" type="email" required autocomplete="email" value="${esc(finishingAccount?pendingEmail:'')}" placeholder="Tu correo" ${finishingAccount?'readonly':''}><input name="password" type="password" minlength="8" autocomplete="${accountMode==='signin'?'current-password':'new-password'}" placeholder="Contraseña (8 caracteres)" required><button class="primary-btn" type="submit">${finishingAccount?'Guardar contraseña':accountMode==='signin'?'Iniciar sesión':'Vincular correo'}</button></form>${!finishingAccount?`<button class="text-btn" data-action="toggleAccountMode">${accountMode==='signin'?'Vincular una cuenta nueva':'Ya tengo una cuenta'}</button>`:''}` : ''}</div>${currentUser && !currentUser.is_anonymous && !finishingAccount ? '<button class="secondary-btn" data-action="signOut">Cerrar sesión</button>' : ''}</div>
         <div class="setting-item"><div><strong>Tema</strong><p>Elige cómo quieres ver Huellitas.</p></div><select id="themeSelect" class="compact-select"><option value="light" ${settings.theme==='light'?'selected':''}>Claro</option><option value="dark" ${settings.theme==='dark'?'selected':''}>Oscuro</option></select></div>
         <div class="setting-item"><div><strong>Mis publicaciones</strong><p>Resuelve o elimina tus avisos y administra tus adopciones.</p></div><button class="secondary-btn" data-action="myReports">Abrir</button></div>
         <div class="setting-item"><div><strong>Instalar Huellitas</strong><p>Agrega Huellitas a la pantalla de inicio del celular.</p></div><button class="secondary-btn" data-action="installHelp">Cómo hacerlo</button></div>
         <div class="setting-item"><div><strong>Actualizar datos</strong><p>Vuelve a consultar reportes y adopciones.</p></div><button class="secondary-btn" data-action="refreshAll">Actualizar</button></div>
-        <div class="setting-item"><div><strong>Privacidad</strong><p>Usamos un usuario anónimo del dispositivo para saber qué publicaciones puede gestionar cada persona. No mostramos ese identificador.</p></div><span class="small-note">Sin contraseña</span></div>
+        <div class="setting-item"><div><strong>Privacidad</strong><p>Tu teléfono solo se comparte con el responsable de la adopción que solicitaste. El teléfono de contacto del responsable se revela al solicitante únicamente tras aceptar.</p></div></div>
         <div class="setting-item"><div><strong>Datos locales</strong><p>Solo afecta respaldos guardados en este navegador; no borra publicaciones compartidas.</p></div><button class="danger-outline" data-action="clearLocal">Limpiar</button></div>
       </div>
     </section>`;
     document.getElementById('themeSelect').addEventListener('change', e=>{ settings.theme=e.target.value; saveSettings(settings); applyTheme(); });
+    const accountForm=document.getElementById('accountForm'); if(accountForm) accountForm.addEventListener('submit',linkAccount);
     bindDynamic();
   }
 
@@ -285,6 +342,8 @@
         if(a==='installHelp') showInstallHelp(true);
         if(a==='refreshAll') { await refreshAll(); toast('Datos actualizados.'); if(currentRoute==='settings') renderSettings(); }
         if(a==='clearLocal') clearLocalData();
+        if(a==='signOut') await signOutAccount();
+        if(a==='toggleAccountMode'){accountMode=accountMode==='signin'?'link':'signin';renderSettings();}
       };
     });
   }
@@ -396,6 +455,7 @@
 
   function openAdoptionPublishModal(){
     if(!remoteEnabled){ toast('Huellitas debe estar conectada para publicar una adopción.'); return; }
+    if(currentUser?.is_anonymous){toast('Vincula un correo verificado y una contraseña para administrar tus adopciones desde otros dispositivos.');navigate('settings');return;}
     if(!adoptionTableReady){ toast('Primero activa la tabla de adopciones con supabase-adoptions.sql.'); return; }
     modalRoot.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2>Publicar mascota para adopción</h2><div style="font-size:12px;color:var(--muted)">Esta publicación aparecerá únicamente en Adopta.</div></div><button class="close-btn" id="closeModal">×</button></div>
       <form id="adoptPublishForm"><div class="form-grid">
@@ -435,9 +495,11 @@
       if(error) throw error;
       photoUrl=supabaseClient.storage.from('adoption-photos').getPublicUrl(path).data.publicUrl;
     }
-    const row={user_id:currentUser.id,name:form.name,species:form.species,age:form.age,size:form.size,district:form.district,description:form.description,contact:form.contact,publisher_name:form.publisher_name||null,photo_url:photoUrl,status:'available'};
-    const {data,error}=await supabaseClient.from('adoptions').insert(row).select().single();
+    const row={user_id:currentUser.id,name:form.name,species:form.species,age:form.age,size:form.size,district:form.district,description:form.description,publisher_name:form.publisher_name||null,photo_url:photoUrl,status:'available'};
+    const {data,error}=await supabaseClient.from('adoptions').insert(row).select('id,user_id,name,species,age,size,district,description,publisher_name,photo_url,status,created_at,updated_at').single();
     if(error) throw error;
+    const {error:contactError}=await supabaseClient.from('adoption_contacts').insert({adoption_id:data.id,owner_id:currentUser.id,contact:form.contact});
+    if(contactError){await supabaseClient.from('adoptions').delete().eq('id',data.id).eq('user_id',currentUser.id);if(photoUrl)await tryDeleteStoragePhoto(photoUrl,'adoption-photos');throw contactError;}
     adoptionsCache=[data,...adoptionsCache];
   }
 
@@ -446,11 +508,12 @@
     const owner = remoteEnabled && currentUser && p.user_id===currentUser.id;
     const actions = owner
       ? `${p.status==='available'?'<button class="primary-btn" id="resolveAdoptionBtn">Marcar como adoptado</button>':''}<button class="secondary-btn" id="closeAdopt">Cerrar</button><button class="danger-btn" id="deleteAdoptionBtn">Eliminar</button>`
-      : `<button class="secondary-btn" id="closeAdopt">Cerrar</button><button class="primary-btn" id="applyAdopt">Quiero adoptar</button>`;
-    modalRoot.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2>${esc(p.name)}</h2><div style="font-size:12px;color:var(--muted)">${p.status==='adopted'?'Ya adoptado':'Disponible para adopción'}</div></div><button class="close-btn" id="closeModal">×</button></div><img class="detail-hero" src="${esc(p.photo_url||placeholderImage())}" alt="Foto de ${esc(p.name)}" onerror="this.src='${placeholderImage()}'"><div class="info-list"><div class="info-item"><strong>Especie</strong><span>${esc(p.species)}</span></div><div class="info-item"><strong>Edad</strong><span>${esc(p.age)}</span></div><div class="info-item"><strong>Tamaño</strong><span>${esc(p.size)}</span></div><div class="info-item"><strong>Distrito</strong><span>${esc(p.district)}</span></div><div class="info-item"><strong>Descripción</strong><span>${esc(p.description)}</span></div><div class="info-item"><strong>Responsable</strong><span>${esc(p.publisher_name||'Publicación de la comunidad')}</span></div><div class="info-item"><strong>Contacto</strong><span>${esc(p.contact)}</span></div></div><div class="modal-footer">${actions}</div></div></div>`;
+      : `<button class="secondary-btn" id="closeAdopt">Cerrar</button>${currentUser?.is_anonymous?'<button class="primary-btn" id="linkAccountFromAdoption">Vincular cuenta</button>':'<button class="primary-btn" id="applyAdopt">Quiero adoptar</button>'}`;
+    modalRoot.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2>${esc(p.name)}</h2><div style="font-size:12px;color:var(--muted)">${p.status==='adopted'?'Ya adoptado':'Disponible para adopción'}</div></div><button class="close-btn" id="closeModal">×</button></div><img class="detail-hero" src="${esc(p.photo_url||placeholderImage())}" alt="Foto de ${esc(p.name)}" onerror="this.src='${placeholderImage()}'"><div class="info-list"><div class="info-item"><strong>Especie</strong><span>${esc(p.species)}</span></div><div class="info-item"><strong>Edad</strong><span>${esc(p.age)}</span></div><div class="info-item"><strong>Tamaño</strong><span>${esc(p.size)}</span></div><div class="info-item"><strong>Distrito</strong><span>${esc(p.district)}</span></div><div class="info-item"><strong>Descripción</strong><span>${esc(p.description)}</span></div><div class="info-item"><strong>Responsable</strong><span>${esc(p.publisher_name||'Publicación de la comunidad')}</span></div><div class="info-item"><strong>Contacto</strong><span>Se comparte con la persona solicitante si apruebas su solicitud.</span></div></div><div class="modal-footer">${actions}</div></div></div>`;
     document.getElementById('closeModal').onclick=closeModal;
     document.getElementById('closeAdopt').onclick=closeModal;
     const apply=document.getElementById('applyAdopt'); if(apply) apply.onclick=()=>openAdoptionForm(p);
+    const link=document.getElementById('linkAccountFromAdoption'); if(link) link.onclick=()=>{closeModal();navigate('settings');};
     const resolve=document.getElementById('resolveAdoptionBtn'); if(resolve) resolve.onclick=async()=>{closeModal();await resolveAdoption(p.id);};
     const del=document.getElementById('deleteAdoptionBtn'); if(del) del.onclick=async()=>{closeModal();await deleteAdoption(p.id);};
   }
@@ -465,9 +528,9 @@
       const fd=Object.fromEntries(new FormData(e.currentTarget).entries());
       try{
         if(!remoteEnabled || !currentUser) throw new Error('Huellitas no está conectada.');
-        const {error}=await supabaseClient.from('adoption_requests').insert({adoption_id:p.id,applicant_user_id:currentUser.id,name:fd.name,phone:fd.phone,reason:fd.reason,status:'pending'});
+        const {error}=await supabaseClient.from('adoption_requests').insert({adoption_id:p.id,applicant_user_id:currentUser.id,name:fd.name,phone:fd.phone,reason:fd.reason});
         if(error) throw error;
-        closeModal(); toast('Solicitud enviada al responsable.');
+        closeModal(); toast('Solicitud enviada al responsable.'); navigate('my');
       }catch(err){btn.disabled=false;btn.textContent='Enviar solicitud';toast(errorText(err,'No se pudo enviar la solicitud.'));}
     });
   }
@@ -503,6 +566,52 @@
   }
 
   function closeModal(){ modalRoot.innerHTML=''; }
+
+  async function loadNotifications(){
+    if(!remoteEnabled || !currentUser) return;
+    const [list,countResult]=await Promise.all([
+      supabaseClient.from('notifications').select('id,title,body,kind,request_id,is_read,created_at').eq('recipient_user_id',currentUser.id).order('created_at',{ascending:false}).limit(40),
+      supabaseClient.from('notifications').select('id',{count:'exact',head:true}).eq('recipient_user_id',currentUser.id).eq('is_read',false)
+    ]);
+    if(list.error || countResult.error){console.warn('Huellitas notificaciones:',list.error||countResult.error);return;}
+    notificationsCache=list.data||[];
+    const unread=countResult.count||0;
+    notificationUnreadCount=unread;
+    notificationCount.textContent=unread>9?'9+':String(unread); notificationCount.hidden=unread===0;
+  }
+
+  function openNotifications(){
+    const unread=notificationUnreadCount;
+    modalRoot.innerHTML=`<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2>Notificaciones</h2><div style="font-size:12px;color:var(--muted)">${unread?`${unread} sin leer`:'Estás al día'}</div></div><button class="close-btn" id="closeModal">×</button></div>${notificationsCache.length?notificationsCache.map(n=>`<div class="notification-row ${n.is_read?'':'unread'}"><span class="notification-dot" style="${n.is_read?'visibility:hidden':''}"></span><button data-notification-id="${esc(n.id)}"><strong>${esc(n.title)}</strong><p>${esc(n.body)}</p><span class="small-note">${fmtDate((n.created_at||'').slice(0,10))}</span></button></div>`).join(''):emptyBlock('Aún no tienes notificaciones.','Cuando alguien responda a una solicitud de adopción, te avisaremos aquí.') }<div class="modal-footer"><button class="secondary-btn" id="closeNotifications">Cerrar</button>${unread?'<button class="primary-btn" id="markAllNotifications">Marcar leídas</button>':''}</div></div></div>`;
+    document.getElementById('closeModal').onclick=closeModal;document.getElementById('closeNotifications').onclick=closeModal;
+    modalRoot.querySelectorAll('[data-notification-id]').forEach(b=>b.onclick=async()=>{const {error}=await supabaseClient.from('notifications').update({is_read:true}).eq('id',b.dataset.notificationId).eq('recipient_user_id',currentUser.id);if(error){toast(errorText(error,'No se pudo marcar como leída.'));return;}closeModal();await loadNotifications();navigate('my');});
+    const all=document.getElementById('markAllNotifications'); if(all) all.onclick=async()=>{const {error}=await supabaseClient.from('notifications').update({is_read:true}).eq('recipient_user_id',currentUser.id).eq('is_read',false);if(error){toast(errorText(error,'No se pudieron marcar como leídas.'));return;}await loadNotifications();openNotifications();};
+  }
+
+  async function linkAccount(e){
+    e.preventDefault(); if(!remoteEnabled || !currentUser) return;
+    const fd=new FormData(e.currentTarget),email=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
+    if(accountMode==='signin'){
+      if(currentUser.is_anonymous && !confirm('Los datos que sigan vinculados solo a esta sesión anónima no se trasladarán automáticamente a tu cuenta. ¿Continuar?')) return;
+      const {error}=await supabaseClient.auth.signInWithPassword({email,password}); if(error){toast(errorText(error,'No se pudo iniciar sesión.'));return;} window.location.reload(); return;
+    }
+    const pending=localStorage.getItem('huellitas_pending_account_email');
+    if(pending && currentUser.email===pending && currentUser.email_confirmed_at){
+      const {error}=await supabaseClient.auth.updateUser({password}); if(error){toast(errorText(error,'No se pudo guardar la contraseña.'));return;}
+      localStorage.removeItem('huellitas_pending_account_email'); toast('Cuenta lista. Inicia sesión en otros dispositivos con este correo y contraseña.'); await refreshAll(); renderSettings(); return;
+    }
+    if(!currentUser.is_anonymous){toast('Esta cuenta ya tiene un correo vinculado.');return;}
+    const {error}=await supabaseClient.auth.updateUser({email});
+    if(error){toast(errorText(error,'No se pudo vincular el correo.'));return;}
+    localStorage.setItem('huellitas_pending_account_email',email);
+    toast('Revisa tu correo y confirma el vínculo. Luego vuelve aquí para guardar la contraseña.');
+  }
+
+  async function signOutAccount(){
+    if(!confirm('Al cerrar sesión, las publicaciones que sigan asociadas a una sesión anónima de este dispositivo no se trasladarán a la cuenta vinculada. ¿Continuar?')) return;
+    const {error}=await supabaseClient.auth.signOut(); if(error){toast(errorText(error,'No se pudo cerrar sesión.'));return;}
+    window.location.reload();
+  }
   function toast(msg){toastEl.textContent=msg;toastEl.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>toastEl.classList.remove('show'),2600)}
   function placeholderImage(){return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="100%" height="100%" fill="#eef3fb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#1268e8" font-family="Arial" font-size="38">🐾 Huellitas</text></svg>`)}
 
@@ -525,7 +634,7 @@
 
   async function loadAdoptions(){
     if(!remoteEnabled){ adoptionsCache=[]; adoptionTableReady=false; return; }
-    const {data,error}=await supabaseClient.from('adoptions').select('*').order('created_at',{ascending:false});
+    const {data,error}=await supabaseClient.from('adoptions').select('id,user_id,name,species,age,size,district,description,publisher_name,photo_url,status,created_at,updated_at').order('created_at',{ascending:false});
     if(error){
       adoptionTableReady=false; adoptionsCache=[];
       if(error.code!=='42P01' && error.code!=='PGRST205') console.warn('Huellitas adopciones:',error);
@@ -534,7 +643,7 @@
     adoptionTableReady=true; adoptionsCache=data||[];
     if(currentRoute==='home') renderHome();
     if(currentRoute==='adopt') renderAdopt();
-    if(currentRoute==='my') renderMyPublications();
+    if(currentRoute==='my'){ renderMyPublications(); loadMyAdoptionRequests(); }
   }
 
   async function refreshAll(){ await loadReports(); await loadAdoptions(); }
@@ -542,16 +651,20 @@
   async function initSupabase(){
     if(!hasSupabaseConfig){ remoteEnabled=false; reportsCache=localReports(); adoptionsCache=[]; return; }
     try{
-      supabaseClient = window.supabase.createClient(config.url,config.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+      supabaseClient = window.supabase.createClient(config.url,config.anonKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       let {data:{session}}=await supabaseClient.auth.getSession();
       if(!session){ const sign=await supabaseClient.auth.signInAnonymously(); if(sign.error) throw sign.error; session=sign.data.session; }
       currentUser=session?.user || null; if(!currentUser) throw new Error('No se pudo crear una sesión.');
       remoteEnabled=true;
       await loadReports();
       await loadAdoptions();
+      await loadNotifications();
+      notificationsBtn.onclick=openNotifications;
       realtimeChannel = supabaseClient.channel('huellitas-live')
         .on('postgres_changes',{event:'*',schema:'public',table:'reports'},async()=>{ try{await loadReports();}catch{} })
         .on('postgres_changes',{event:'*',schema:'public',table:'adoptions'},async()=>{ try{await loadAdoptions(); if(currentRoute==='settings') renderSettings();}catch{} })
+        .on('postgres_changes',{event:'*',schema:'public',table:'adoption_requests'},async()=>{ try{await loadNotifications();if(currentRoute==='my')await loadMyAdoptionRequests();}catch{} })
+        .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`recipient_user_id=eq.${currentUser.id}`},async()=>{try{await loadNotifications();}catch{}})
         .subscribe();
     }catch(err){
       remoteEnabled=false; currentUser=null; reportsCache=localReports(); adoptionsCache=[];
