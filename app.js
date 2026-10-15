@@ -99,29 +99,23 @@
     const reports = activeReports();
     const lost = reports.filter(r=>r.type==='lost').slice(0,3);
     const adopt = activeAdoptions().slice(0,3);
+    const spotlight = lost.find(r=>r.photo_url || r.photo) || adopt.find(p=>p.photo_url);
     main.innerHTML = `
       <section class="hero">
-        <span class="tag">🐾 Bienvenido a Huellitas</span>
-        <h1>Que encontrar ayuda sea cuestión de un click.</h1>
-        <p>Una plataforma simple para reportar mascotas, ayudarlas a volver a casa, encontrar animales que buscan hogar y ubicar servicios veterinarios.</p>
+        <div class="hero-copy">
+          <span class="tag">Una comunidad que cuida</span>
+          <h1>Un lugar para volver a encontrarse.</h1>
+          <p>Reporta mascotas perdidas, ayuda a reunir familias y conoce animales que buscan un hogar.</p>
+          <div class="hero-actions"><button class="primary-btn" data-action="reportLost">Publicar un reporte</button><button class="text-btn" data-route="adopt">Conocer adopciones <span aria-hidden="true">→</span></button></div>
+          <div class="sync-note"><span class="sync-dot ${remoteEnabled?'is-connected':''}"></span>${remoteEnabled?'Publicaciones sincronizadas':'Conectando con Huellitas'}</div>
+        </div>
+        ${spotlight ? `<div class="hero-photo"><img src="${esc(spotlight.photo_url || spotlight.photo)}" alt="Mascota publicada en Huellitas" onerror="this.parentElement.classList.add('image-unavailable');this.remove()"><span>Historias reales de nuestra comunidad</span></div>` : `<div class="hero-art" aria-hidden="true"><span>Una huellita puede cambiarlo todo.</span><svg viewBox="0 0 120 120" fill="none"><path d="M53 69c-8 7-17 15-13 24 3 7 11 9 20 4 8-5 14-5 22 0 9 5 17 3 20-4 4-9-5-17-13-24-6-6-11-9-18-9s-12 3-18 9Z" fill="currentColor"/><ellipse cx="30" cy="45" rx="11" ry="16" transform="rotate(-25 30 45)" fill="currentColor"/><ellipse cx="54" cy="31" rx="11" ry="16" transform="rotate(-9 54 31)" fill="currentColor"/><ellipse cx="79" cy="34" rx="11" ry="16" transform="rotate(12 79 34)" fill="currentColor"/><ellipse cx="99" cy="51" rx="11" ry="16" transform="rotate(31 99 51)" fill="currentColor"/></svg></div>`}
       </section>
-      <div class="quick-grid">
-        <button class="quick-card" data-action="reportLost"><span class="q-icon">${iconFor('lost')}</span><strong>Se perdió mi mascota</strong><small>Publica el aviso en menos de un minuto.</small></button>
-        <button class="quick-card" data-action="reportFound"><span class="q-icon">${iconFor('found')}</span><strong>Encontré una mascota</strong><small>Ayuda a que vuelva con su familia.</small></button>
-        <button class="quick-card" data-action="adopt"><span class="q-icon">${iconFor('adopt')}</span><strong>Quiero adoptar</strong><small>Conoce publicaciones reales de la comunidad.</small></button>
-        <button class="quick-card" data-action="services"><span class="q-icon">${iconFor('service')}</span><strong>Veterinaria</strong><small>Encuentra atención y abre la ruta.</small></button>
-      </div>
-      <div class="notice">💡 <strong>Los reportes y adopciones son compartidos.</strong> Lo que publicas se guarda online y los cambios se reflejan en los demás dispositivos cuando Huellitas está conectada.</div>
       <div class="section-head"><div><h2>Mascotas que necesitan ayuda</h2><p>Reportes recientes de la comunidad.</p></div><button class="link-btn" data-route="lost">Ver todo</button></div>
       <div class="cards-grid">${lost.length ? lost.map(reportCard).join('') : emptyBlock('No hay reportes activos todavía.','Sé el primero en publicar uno.')}</div>
       <div class="section-head"><div><h2>Adopciones</h2><p>${adopt.length ? 'Mascotas publicadas por usuarios y rescatistas.' : 'Todavía no hay mascotas publicadas para adopción.'}</p></div><button class="link-btn" data-route="adopt">Ver todo</button></div>
       <div class="cards-grid">${adopt.length ? adopt.map(adoptCard).join('') : emptyBlock('Aún no hay mascotas en adopción.','Cuando alguien publique una, aparecerá aquí.')}</div>
-      <div class="section-head"><div><h2>Huellitas</h2><p>${remoteEnabled ? 'Conectada y sincronizada.' : 'Modo local de respaldo.'}</p></div></div>
-      <div class="profile-box"><div class="stats">
-        <div class="stat"><strong>${reports.length}</strong><span>reportes activos</span></div>
-        <div class="stat"><strong>${activeAdoptions().length}</strong><span>en adopción</span></div>
-        <div class="stat"><strong>${services.length}</strong><span>veterinarias</span></div>
-      </div></div>`;
+      <div class="community-note"><span class="community-mark">♥</span><div><strong>Una comunidad que acompaña</strong><p>Las publicaciones de Perdidos y Adopta están separadas y se sincronizan con Supabase.</p></div></div>`;
     bindDynamic();
   }
 
@@ -153,7 +147,7 @@
   }
 
   function renderLost(){
-    main.innerHTML = `<section><div class="section-head"><div><h2>Mascotas perdidas y encontradas</h2><p>Los reportes públicos vienen de la base compartida.</p></div></div>
+    main.innerHTML = `<section><div class="section-head"><div><span class="eyebrow">ENCUENTROS</span><h2>Mascotas perdidas y encontradas</h2><p>Ayudemos a que cada mascota vuelva a casa.</p></div><div class="section-actions"><button class="secondary-btn" data-action="reportFound">Encontré una mascota</button><button class="primary-btn" data-action="reportLost">＋ Reportar mascota</button></div></div>
       <div class="filters"><input id="reportSearch" placeholder="Buscar por nombre, distrito…" aria-label="Buscar reportes"><select id="reportType"><option value="all">Todos</option><option value="lost">Perdidas</option><option value="found">Encontradas</option></select><select id="reportSpecies"><option value="all">Todas las especies</option><option value="Perro">Perros</option><option value="Gato">Gatos</option></select></div><div id="reportList" class="cards-grid"></div></section>`;
     const update = () => {
       const q = document.getElementById('reportSearch').value.toLowerCase().trim();
@@ -241,7 +235,7 @@
     const mineAdoptions = remoteEnabled && currentUser ? adoptionsCache.filter(a => a.user_id === currentUser.id) : [];
     const resolvedMine = mineReports.filter(r => r.status === 'resolved');
     main.innerHTML = `<section>
-      <div class="section-head"><div><h2>Mis publicaciones</h2><p>Administra tus reportes y mascotas publicadas para adopción.</p></div><button class="primary-btn" data-action="reportLost">＋ Publicar reporte</button></div>
+      <div class="section-head"><div><span class="eyebrow">TU CUENTA</span><h2>Mi espacio</h2><p>Administra tus reportes y publicaciones de adopción.</p></div><div class="section-actions"><button class="secondary-btn" data-route="settings">Configuración</button><button class="primary-btn" data-action="reportLost">＋ Publicar reporte</button></div></div>
       <div class="section-head"><div><h2>Perdidas y encontradas</h2><p>Tus avisos compartidos con la comunidad.</p></div></div>
       ${mineReports.length ? `<div class="cards-grid">${mineReports.filter(r=>r.status!=='resolved').map(myReportCard).join('')}</div>` : emptyBlock('Todavía no tienes reportes.','Publica una mascota perdida o encontrada.')}
       ${resolvedMine.length ? `<div class="section-head"><div><h2>Casos resueltos</h2><p>Ya no aparecen en la búsqueda pública activa.</p></div></div><div class="cards-grid">${resolvedMine.map(myReportCard).join('')}</div>` : ''}
@@ -584,7 +578,6 @@
 
   document.addEventListener('click',e=>{ const routeEl=e.target.closest('[data-route]'); if(routeEl){e.preventDefault();navigate(routeEl.dataset.route);} });
   navItems.forEach(btn=>btn.addEventListener('click',()=>navigate(btn.dataset.route)));
-  document.getElementById('reportBtn').addEventListener('click',()=>openReportModal('lost'));
   document.getElementById('settingsBtn').addEventListener('click',()=>navigate('settings'));
   window.addEventListener('beforeinstallprompt', e=>{e.preventDefault();deferredInstall=e;installBtn.hidden=false;});
   installBtn.addEventListener('click',async()=>{if(!deferredInstall){showInstallHelp(true);return;} deferredInstall.prompt(); try{await deferredInstall.userChoice;}catch{} deferredInstall=null;installBtn.hidden=true;});
@@ -598,3 +591,4 @@
   }
   boot();
 })();
+
