@@ -1,4 +1,4 @@
-const CACHE = 'huellitas-v7-adopciones-servicios';
+const CACHE = 'huellitas-v8-sage-design';
 const APP_SHELL = [
   './',
   './index.html',
@@ -45,3 +45,4 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+
