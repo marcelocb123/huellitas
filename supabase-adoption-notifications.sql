@@ -1,14 +1,22 @@
 -- Huellitas: solicitudes de adopción, notificaciones y contactos privados.
--- Ejecutar una sola vez en Supabase > SQL Editor, en el proyecto correspondiente.
+-- Instalación completa para un proyecto nuevo o aislado.
+-- En producción con la app existente, usa los archivos predeploy y lockdown.
 -- No elimina publicaciones ni solicitudes. Copia los teléfonos actuales a una tabla
--- protegida y conserva la columna anterior, pero revoca el acceso de lectura a ella.
+-- protegida y revoca el acceso de lectura a la columna antigua.
 -- Para recuperar una cuenta en otros dispositivos, habilita manual identity linking
 -- (Authentication > Sign In / Providers > Allow manual linking) y Email/Password.
+
+begin;
 
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 
 -- Separa los teléfonos del listado público sin perder los valores actuales.
+-- The base adoption migration predates the private contact table and required
+-- adoptions.contact. New clients store contact data only in adoption_contacts,
+-- so leave the legacy column nullable to avoid exposing private data in listings.
+alter table public.adoptions alter column contact drop not null;
+
 create table if not exists public.adoption_contacts (
   adoption_id uuid primary key references public.adoptions(id) on delete cascade,
   owner_id uuid not null references auth.users(id) on delete cascade,
@@ -298,3 +306,5 @@ where r.status in ('approved', 'rejected')
     where n.request_id = r.id
       and n.kind = case r.status when 'approved' then 'request_approved' else 'request_rejected' end
   );
+
+commit;

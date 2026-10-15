@@ -383,14 +383,15 @@
 
   async function publishReport(report, blob, localDataUrl){
     if(remoteEnabled){
+      const user = await getActiveUser();
       let photoUrl = null;
-      if(blob && currentUser){
-        const path = `${currentUser.id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.jpg`;
+      if(blob){
+        const path = `${user.id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.jpg`;
         const {error:upErr} = await supabaseClient.storage.from('report-photos').upload(path, blob, {contentType:'image/jpeg',upsert:false});
         if(upErr) throw upErr;
         photoUrl = supabaseClient.storage.from('report-photos').getPublicUrl(path).data.publicUrl;
       }
-      const row = {user_id:currentUser.id,...report,photo_url:photoUrl,status:'active'};
+      const row = {user_id:user.id,...report,photo_url:photoUrl,status:'active'};
       const {data,error} = await supabaseClient.from('reports').insert(row).select().single();
       if(error) throw error;
       reportsCache = [data, ...reportsCache];
@@ -453,9 +454,11 @@
     try{ if(navigator.share){ await navigator.share({title:'Huellitas',text}); toast('Reporte compartido.'); } else { await navigator.clipboard.writeText(text); toast('Información copiada para compartirla.'); } }catch{}
   }
 
-  function openAdoptionPublishModal(){
+  async function openAdoptionPublishModal(){
     if(!remoteEnabled){ toast('Huellitas debe estar conectada para publicar una adopción.'); return; }
-    if(currentUser?.is_anonymous){toast('Vincula un correo verificado y una contraseña para administrar tus adopciones desde otros dispositivos.');navigate('settings');return;}
+    let user;
+    try{ user=await getActiveUser(); }catch(err){toast(errorText(err,'No se pudo verificar la sesión.'));return;}
+    if(user.is_anonymous){toast('Vincula un correo verificado y una contraseña para administrar tus adopciones desde otros dispositivos.');navigate('settings');return;}
     if(!adoptionTableReady){ toast('Primero activa la tabla de adopciones con supabase-adoptions.sql.'); return; }
     modalRoot.innerHTML = `<div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="modal-head"><div><h2>Publicar mascota para adopción</h2><div style="font-size:12px;color:var(--muted)">Esta publicación aparecerá únicamente en Adopta.</div></div><button class="close-btn" id="closeModal">×</button></div>
       <form id="adoptPublishForm"><div class="form-grid">
@@ -487,19 +490,21 @@
   }
 
   async function publishAdoption(form, blob){
-    if(!remoteEnabled || !currentUser) throw new Error('Huellitas no está conectada.');
+    if(!remoteEnabled) throw new Error('Huellitas no está conectada.');
+    const user=await getActiveUser();
+    if(user.is_anonymous) throw new Error('Vincula una cuenta verificada antes de publicar una mascota en adopción.');
     let photoUrl=null;
     if(blob){
-      const path=`${currentUser.id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.jpg`;
+      const path=`${user.id}/${crypto.randomUUID ? crypto.randomUUID() : Date.now()}.jpg`;
       const {error}=await supabaseClient.storage.from('adoption-photos').upload(path,blob,{contentType:'image/jpeg',upsert:false});
       if(error) throw error;
       photoUrl=supabaseClient.storage.from('adoption-photos').getPublicUrl(path).data.publicUrl;
     }
-    const row={user_id:currentUser.id,name:form.name,species:form.species,age:form.age,size:form.size,district:form.district,description:form.description,publisher_name:form.publisher_name||null,photo_url:photoUrl,status:'available'};
+    const row={user_id:user.id,name:form.name,species:form.species,age:form.age,size:form.size,district:form.district,description:form.description,publisher_name:form.publisher_name||null,photo_url:photoUrl,status:'available'};
     const {data,error}=await supabaseClient.from('adoptions').insert(row).select('id,user_id,name,species,age,size,district,description,publisher_name,photo_url,status,created_at,updated_at').single();
     if(error) throw error;
-    const {error:contactError}=await supabaseClient.from('adoption_contacts').insert({adoption_id:data.id,owner_id:currentUser.id,contact:form.contact});
-    if(contactError){await supabaseClient.from('adoptions').delete().eq('id',data.id).eq('user_id',currentUser.id);if(photoUrl)await tryDeleteStoragePhoto(photoUrl,'adoption-photos');throw contactError;}
+    const {error:contactError}=await supabaseClient.from('adoption_contacts').insert({adoption_id:data.id,owner_id:user.id,contact:form.contact});
+    if(contactError){await supabaseClient.from('adoptions').delete().eq('id',data.id).eq('user_id',user.id);if(photoUrl)await tryDeleteStoragePhoto(photoUrl,'adoption-photos');throw contactError;}
     adoptionsCache=[data,...adoptionsCache];
   }
 
@@ -656,21 +661,57 @@
       if(!session){ const sign=await supabaseClient.auth.signInAnonymously(); if(sign.error) throw sign.error; session=sign.data.session; }
       currentUser=session?.user || null; if(!currentUser) throw new Error('No se pudo crear una sesión.');
       remoteEnabled=true;
+      supabaseClient.auth.onAuthStateChange((event,nextSession)=>{
+        const previous=currentUser;
+        const nextUser=nextSession?.user||null;
+        const identityChanged=(previous?.id||null)!==(nextUser?.id||null);
+        const accountStateChanged=previous?.is_anonymous!==nextUser?.is_anonymous || previous?.email_confirmed_at!==nextUser?.email_confirmed_at;
+        currentUser=nextUser;
+        if(!remoteEnabled || event==='INITIAL_SESSION' || (!identityChanged && !accountStateChanged)) return;
+        // Supabase auth events can fire in another tab when its shared browser
+        // session changes. Defer API work until the auth callback releases its lock.
+        setTimeout(async()=>{
+          if(!currentUser) return;
+          try{
+            if(identityChanged) await refreshAll();
+            await loadNotifications();
+            subscribeRealtime();
+            if(currentRoute==='settings') renderSettings();
+            else if(currentRoute==='my'){ renderMyPublications(); await loadMyAdoptionRequests(); }
+          }catch(err){console.warn('Huellitas actualización de sesión:',err);}
+        },0);
+      });
       await loadReports();
       await loadAdoptions();
       await loadNotifications();
       notificationsBtn.onclick=openNotifications;
-      realtimeChannel = supabaseClient.channel('huellitas-live')
-        .on('postgres_changes',{event:'*',schema:'public',table:'reports'},async()=>{ try{await loadReports();}catch{} })
-        .on('postgres_changes',{event:'*',schema:'public',table:'adoptions'},async()=>{ try{await loadAdoptions(); if(currentRoute==='settings') renderSettings();}catch{} })
-        .on('postgres_changes',{event:'*',schema:'public',table:'adoption_requests'},async()=>{ try{await loadNotifications();if(currentRoute==='my')await loadMyAdoptionRequests();}catch{} })
-        .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`recipient_user_id=eq.${currentUser.id}`},async()=>{try{await loadNotifications();}catch{}})
-        .subscribe();
+      subscribeRealtime();
     }catch(err){
       remoteEnabled=false; currentUser=null; reportsCache=localReports(); adoptionsCache=[];
       setTimeout(()=>toast('Huellitas está en modo local. Revisa la conexión a Supabase si necesitas compartir publicaciones.'),700);
       console.warn('Huellitas backend:',err);
     }
+  }
+
+  async function getActiveUser(){
+    const {error:refreshError}=await supabaseClient.auth.refreshSession();
+    if(refreshError) throw refreshError;
+    const {data,error}=await supabaseClient.auth.getUser();
+    if(error) throw error;
+    if(!data?.user) throw new Error('Inicia sesión nuevamente para publicar.');
+    currentUser=data.user;
+    return currentUser;
+  }
+
+  function subscribeRealtime(){
+    if(!supabaseClient || !currentUser) return;
+    if(realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
+    realtimeChannel = supabaseClient.channel('huellitas-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'reports'},async()=>{ try{await loadReports();}catch{} })
+      .on('postgres_changes',{event:'*',schema:'public',table:'adoptions'},async()=>{ try{await loadAdoptions(); if(currentRoute==='settings') renderSettings();}catch{} })
+      .on('postgres_changes',{event:'*',schema:'public',table:'adoption_requests'},async()=>{ try{await loadNotifications();if(currentRoute==='my')await loadMyAdoptionRequests();}catch{} })
+      .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`recipient_user_id=eq.${currentUser.id}`},async()=>{try{await loadNotifications();}catch{}})
+      .subscribe();
   }
 
   function applyTheme(){ document.body.classList.toggle('dark-mode',getSettings().theme==='dark'); }
