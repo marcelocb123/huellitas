@@ -10,8 +10,11 @@ begin;
 create schema if not exists private;
 revoke all on schema private from public, anon, authenticated;
 
--- Mantiene temporalmente los permisos y políticas antiguas para que la versión
--- actual del sitio siga funcionando hasta que el PR #2 esté desplegado.
+-- Conserva la columna de contacto legada para la versión actual del sitio.
+-- En adoption_requests se restringen los permisos de columna para proteger los
+-- datos personales; las políticas de lectura/actualización/eliminación se recrean
+-- con el mismo alcance de propietario/solicitante. La política de inserción actual
+-- se deja durante esta etapa de compatibilidad y se endurece en lockdown.
 
 -- Copia los teléfonos actuales para que la nueva app los lea desde una tabla privada.
 -- The base adoption migration predates the private contact table and required
@@ -275,3 +278,4 @@ where r.status in ('approved', 'rejected')
   );
 
 commit;
+
