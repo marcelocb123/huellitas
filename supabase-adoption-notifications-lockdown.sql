@@ -38,6 +38,7 @@ on public.adoption_requests for insert to authenticated
 with check (
   (select auth.jwt()->>'is_anonymous') is distinct from 'true'
   and applicant_user_id = (select auth.uid())
+  and status = 'pending'
   and exists (
     select 1 from public.adoptions a
     where a.id = adoption_requests.adoption_id
@@ -46,4 +47,13 @@ with check (
   )
 );
 
+-- New clients rely on the database default; clients must not set a response state
+-- while creating a request, even if a policy is changed later by mistake.
+revoke insert (status) on public.adoption_requests from authenticated;
+
+-- The compatibility trigger is no longer needed after the old app is retired.
+drop trigger if exists sync_legacy_adoption_contact on public.adoptions;
+drop function if exists private.sync_legacy_adoption_contact();
+
 commit;
+
