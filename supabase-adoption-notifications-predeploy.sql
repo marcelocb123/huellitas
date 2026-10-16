@@ -12,9 +12,10 @@ revoke all on schema private from public, anon, authenticated;
 
 -- Conserva la columna de contacto legada para la versión actual del sitio.
 -- En adoption_requests se restringen los permisos de columna para proteger los
--- datos personales; las políticas de lectura/actualización/eliminación se recrean
--- con el mismo alcance de propietario/solicitante. La política de inserción actual
--- se deja durante esta etapa de compatibilidad y se endurece en lockdown.
+-- datos personales. La aplicación antigua envía status='pending' explícitamente,
+-- así que se conserva ese permiso y se valida el estado en RLS. Durante esta etapa
+-- las políticas conservan el acceso de propietario/solicitante; se permiten
+-- sesiones anónimas en esta etapa para mantener la app antigua y lockdown las bloquea.
 
 -- Copia los teléfonos actuales para que la nueva app los lea desde una tabla privada.
 -- The base adoption migration predates the private contact table and required
@@ -35,6 +36,33 @@ select id, user_id, contact
 from public.adoptions
 where nullif(trim(contact), '') is not null
 on conflict (adoption_id) do nothing;
+
+-- Keep contacts created by the old app during the compatibility window in sync
+-- with the private table read by the new app after an adoption is approved.
+create or replace function private.sync_legacy_adoption_contact()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if nullif(pg_catalog.btrim(new.contact), '') is not null then
+    insert into public.adoption_contacts (adoption_id, owner_id, contact)
+    values (new.id, new.user_id, new.contact)
+    on conflict (adoption_id) do update
+      set owner_id = excluded.owner_id,
+          contact = excluded.contact,
+          updated_at = pg_catalog.now();
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.sync_legacy_adoption_contact() from public, anon, authenticated;
+
+drop trigger if exists sync_legacy_adoption_contact on public.adoptions;
+create trigger sync_legacy_adoption_contact
+after insert or update of user_id, contact on public.adoptions
+for each row execute function private.sync_legacy_adoption_contact();
 
 alter table public.adoption_contacts enable row level security;
 revoke all on public.adoption_contacts from public, anon, authenticated;
@@ -91,10 +119,24 @@ using (owner_id = (select auth.uid()));
 -- y solo puede actualizar estado/fecha. Los datos personales quedan inmutables.
 revoke all on public.adoption_requests from public, anon, authenticated;
 grant select on public.adoption_requests to authenticated;
-grant insert (adoption_id, applicant_user_id, name, phone, reason)
+grant insert (adoption_id, applicant_user_id, name, phone, reason, status)
 on public.adoption_requests to authenticated;
 grant update (status, updated_at) on public.adoption_requests to authenticated;
 grant delete on public.adoption_requests to authenticated;
+
+drop policy if exists adoption_requests_insert_own on public.adoption_requests;
+create policy adoption_requests_insert_own
+on public.adoption_requests for insert to authenticated
+with check (
+  applicant_user_id = (select auth.uid())
+  and status = 'pending'
+  and exists (
+    select 1 from public.adoptions a
+    where a.id = adoption_requests.adoption_id
+      and a.status = 'available'
+      and a.user_id <> (select auth.uid())
+  )
+);
 
 drop policy if exists adoption_requests_select_related on public.adoption_requests;
 drop policy if exists adoption_requests_update_owner on public.adoption_requests;
@@ -278,4 +320,5 @@ where r.status in ('approved', 'rejected')
   );
 
 commit;
+
 
